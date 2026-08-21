@@ -1,14 +1,4 @@
 {
-  "env": [
-    {
-      "key": "NEXT_APP_DATABASE_URL",
-      "description": "Neon PostgreSQL connection string"
-    },
-    {
-      "key": "NEXT_APP_OPENAI_API_KEY",
-      "description": "OpenAI API key (optional, falls back to local embeddings)"
-    }
-  ],
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": ".next"
