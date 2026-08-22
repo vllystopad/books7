@@ -6,11 +6,19 @@
 /* Tools                                                               */
 /* ------------------------------------------------------------------ */
 
+/** One question the tool handles well and one it does not. Surfaced by
+ *  describe_corpus so the model can pick the right tool without trial and error. */
+export type McpToolExamples = {
+  answersWell: string;
+  doesNotAnswer: string;
+};
+
 export type McpTool = {
   name: string;
   description: string;
   /** JSON Schema for the tool's arguments, as sent to the model. */
   inputSchema: Record<string, unknown>;
+  examples: McpToolExamples;
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 

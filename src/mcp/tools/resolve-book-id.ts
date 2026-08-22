@@ -60,5 +60,10 @@ export const resolveBookIdTool: McpTool = {
     required: ["query"],
     additionalProperties: false,
   },
+  examples: {
+    answersWell: "Which book is the one about managers disappearing?",
+    doesNotAnswer:
+      "What does that book argue? — resolve the id first, then call get_book_context.",
+  },
   execute: (args) => resolveBookId(String(args.query ?? "")),
 };

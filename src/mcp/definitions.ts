@@ -1,7 +1,9 @@
 import { compareAuthorsPrompt } from "@/src/mcp/prompts/compare-authors";
 import { listBooksPrompt } from "@/src/mcp/prompts/list-books";
 import { summariseBookPrompt } from "@/src/mcp/prompts/summarise-book";
+import { corpusSummaryProvider } from "@/src/mcp/resources/corpus-summary";
 import { listBooksResource } from "@/src/mcp/resources/list-books";
+import { describeCorpusTool } from "@/src/mcp/tools/describe-corpus";
 import { getBookContextTool } from "@/src/mcp/tools/get-book-context";
 import { listBooksTool } from "@/src/mcp/tools/list-books";
 import { resolveBookIdTool } from "@/src/mcp/tools/resolve-book-id";
@@ -27,6 +29,7 @@ import type {
 // --- Registries -------------------------------------------------------
 
 export const TOOL_REGISTRY: McpTool[] = [
+  describeCorpusTool,
   listBooksTool,
   resolveBookIdTool,
   searchBooksTool,
@@ -39,13 +42,21 @@ export const PROMPT_REGISTRY: McpPrompt[] = [
   summariseBookPrompt,
 ];
 
-export const RESOURCE_PROVIDERS: McpResourceProvider[] = [listBooksResource];
+export const RESOURCE_PROVIDERS: McpResourceProvider[] = [
+  corpusSummaryProvider,
+  listBooksResource,
+];
 
 // --- Serializable specs (protocol list payloads) ---------------------
 
 /** `tools/list` — specs with `execute` stripped. */
 export const MCP_TOOLS: McpToolSpec[] = TOOL_REGISTRY.map(
-  ({ name, description, inputSchema }) => ({ name, description, inputSchema })
+  ({ name, description, inputSchema, examples }) => ({
+    name,
+    description,
+    inputSchema,
+    examples,
+  })
 );
 
 /** `prompts/list` — specs with `render` stripped. */

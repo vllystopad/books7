@@ -60,6 +60,10 @@ export const searchBooksTool: McpTool = {
     required: ["topic"],
     additionalProperties: false,
   },
+  examples: {
+    answersWell: "Which books discuss reversible decisions?",
+    doesNotAnswer: "Read me chapter 2 of a named book — use get_book_context.",
+  },
   execute: (args) =>
     searchBooks(String(args.topic ?? ""), clamp(args.limit, 1, 10, 5)),
 };

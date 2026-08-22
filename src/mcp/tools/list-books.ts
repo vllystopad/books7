@@ -21,6 +21,10 @@ export const listBooksTool: McpTool = {
     required: [],
     additionalProperties: false,
   },
+  examples: {
+    answersWell: "What books are in the library?",
+    doesNotAnswer: "What does the library say about delegation? — use search_books.",
+  },
   execute: async (args) => {
     const limit = clamp(args.limit, 1, 50, 25);
     const resources = await listBooks();
