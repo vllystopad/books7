@@ -26,6 +26,12 @@ export const books = pgTable("books", {
   trustScore: numeric("trust_score", { precision: 3, scale: 1 })
     .notNull()
     .default("5.0"),
+  // AI-provenance. NULL for non-synthetic books; the `synthetic_must_be_marked`
+  // CHECK constraint stops a synthetic row existing without generatedBy and
+  // syntheticNotice. See migration 002.
+  generatedBy: text("generated_by"),
+  generatedAt: timestamp("generated_at", { withTimezone: true }),
+  syntheticNotice: text("synthetic_notice"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
