@@ -1,10 +1,11 @@
-import { BookCard, type BookRow } from "./BookCard";
+import type { BookRecord } from "@/src/core/books/entities";
+import { BookCard } from "./BookCard";
 
-export function BooksList({ books }: { books: BookRow[] }) {
+export function BooksList({ books }: { books: BookRecord[] }) {
   if (books.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
-        No books yet. Seed the database to populate this section.
+        No books match the current filter.
       </p>
     );
   }
