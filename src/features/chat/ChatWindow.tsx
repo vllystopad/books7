@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { JsonBlock } from "./json-block";
+import { JsonViewer } from "./JsonViewer";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -34,7 +34,7 @@ const SUGGESTIONS = [
   "What does the library say about evolution?",
 ];
 
-export function AgentConsole() {
+export function ChatWindow() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [handshake, setHandshake] = useState<Handshake | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
@@ -169,7 +169,7 @@ export function AgentConsole() {
                 </span>
               </div>
               <div className="min-w-0 px-2 py-2 sm:px-3">
-                <JsonBlock value={a.kind === "call" ? a.arguments : a.result} />
+                <JsonViewer value={a.kind === "call" ? a.arguments : a.result} />
               </div>
             </div>
           ))}
@@ -178,13 +178,13 @@ export function AgentConsole() {
     ) : !handshake ? (
       <Empty>Send a message to load the agent handshake.</Empty>
     ) : tab === "tools" ? (
-      <JsonBlock value={handshake.tools} />
+      <JsonViewer value={handshake.tools} />
     ) : tab === "resources" ? (
-      <JsonBlock value={handshake.resources} />
+      <JsonViewer value={handshake.resources} />
     ) : tab === "prompts" ? (
-      <JsonBlock value={handshake.prompts} />
+      <JsonViewer value={handshake.prompts} />
     ) : (
-      <JsonBlock value={{ model: handshake.model, systemPrompt: handshake.systemPrompt }} />
+      <JsonViewer value={{ model: handshake.model, systemPrompt: handshake.systemPrompt }} />
     );
 
   return (

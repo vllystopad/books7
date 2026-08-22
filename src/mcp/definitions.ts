@@ -1,66 +1,68 @@
-import { db } from "@/src/db/client";
-import { books } from "@/src/db/schema";
+import { compareAuthorsPrompt } from "@/src/mcp/prompts/compare-authors";
+import { listBooksPrompt } from "@/src/mcp/prompts/list-books";
+import { summariseBookPrompt } from "@/src/mcp/prompts/summarise-book";
+import { listBooksResource } from "@/src/mcp/resources/list-books";
 import { getBookContextTool } from "@/src/mcp/tools/get-book-context";
+import { listBooksTool } from "@/src/mcp/tools/list-books";
 import { resolveBookIdTool } from "@/src/mcp/tools/resolve-book-id";
 import { searchBooksTool } from "@/src/mcp/tools/search-books";
-import type { McpPrompt, McpResource, McpTool, McpToolSpec } from "@/src/mcp/types";
-import { authorList } from "@/src/mcp/utils";
+import type {
+  McpPrompt,
+  McpPromptSpec,
+  McpResource,
+  McpResourceProvider,
+  McpTool,
+  McpToolSpec,
+} from "@/src/mcp/types";
 
 /**
- * Registry for the MCP surface. Each tool owns its own schema and executor in
- * `./tools/*`; this file only assembles them, so the definitions the model is
- * sent and the ones the inspector renders cannot drift apart.
+ * Generic, reusable MCP plumbing.
+ *
+ * Use-case logic lives in `./resources`, `./prompts`, and `./tools`. This file
+ * only assembles those registries and implements the protocol-level list, call,
+ * and get operations, so the definitions the model is sent and the ones the
+ * inspector renders cannot drift apart.
  */
 
-export const MCP_TOOL_REGISTRY: McpTool[] = [
+// --- Registries -------------------------------------------------------
+
+export const TOOL_REGISTRY: McpTool[] = [
+  listBooksTool,
   resolveBookIdTool,
   searchBooksTool,
   getBookContextTool,
 ];
 
-/** `tools/list` — serializable specs, with `execute` stripped. */
-export const MCP_TOOLS: McpToolSpec[] = MCP_TOOL_REGISTRY.map(
+export const PROMPT_REGISTRY: McpPrompt[] = [
+  listBooksPrompt,
+  compareAuthorsPrompt,
+  summariseBookPrompt,
+];
+
+export const RESOURCE_PROVIDERS: McpResourceProvider[] = [listBooksResource];
+
+// --- Serializable specs (protocol list payloads) ---------------------
+
+/** `tools/list` — specs with `execute` stripped. */
+export const MCP_TOOLS: McpToolSpec[] = TOOL_REGISTRY.map(
   ({ name, description, inputSchema }) => ({ name, description, inputSchema })
 );
 
-export const MCP_PROMPTS: McpPrompt[] = [
-  {
-    name: "compare_authors",
-    description:
-      "Compare what different authors in the library say about a single topic.",
-    arguments: [
-      { name: "topic", description: "The topic to compare across books", required: true },
-    ],
-  },
-  {
-    name: "summarise_book",
-    description: "Produce a grounded summary of one book with attribution.",
-    arguments: [{ name: "slug", description: "Book slug to summarise", required: true }],
-  },
-];
+/** `prompts/list` — specs with `render` stripped. */
+export const MCP_PROMPTS: McpPromptSpec[] = PROMPT_REGISTRY.map(
+  ({ name, description, arguments: args }) => ({
+    name,
+    description,
+    arguments: args,
+  })
+);
 
-/** `resources/list` — one resource per indexed book. */
+// --- Protocol operations ---------------------------------------------
+
+/** `resources/list` — flattens every registered provider. */
 export async function listResources(): Promise<McpResource[]> {
-  const rows: {
-    slug: string;
-    title: string;
-    authors: unknown;
-    tokensTotal: number;
-  }[] = await db
-    .select({
-      slug: books.slug,
-      title: books.title,
-      authors: books.authors,
-      tokensTotal: books.tokensTotal,
-    })
-    .from(books);
-
-  return rows.map((b) => ({
-    uri: `books7://book/${b.slug}`,
-    name: b.title,
-    description: `${authorList(b.authors)} · ${b.tokensTotal.toLocaleString()} tokens`,
-    mimeType: "application/json",
-  }));
+  const batches = await Promise.all(RESOURCE_PROVIDERS.map((p) => p.list()));
+  return batches.flat();
 }
 
 /** `tools/call` — dispatch by name. */
@@ -68,9 +70,36 @@ export async function executeTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
-  const tool = MCP_TOOL_REGISTRY.find((t) => t.name === name);
+  const tool = TOOL_REGISTRY.find((t) => t.name === name);
   if (!tool) return { error: `Unknown tool: ${name}` };
   return tool.execute(args);
 }
 
-export type { McpPrompt, McpResource, McpTool, McpToolSpec };
+/** `prompts/get` — render by name. */
+export async function renderPrompt(
+  name: string,
+  args: Record<string, unknown>
+): Promise<{ name: string; description: string; content: string } | { error: string }> {
+  const prompt = PROMPT_REGISTRY.find((p) => p.name === name);
+  if (!prompt) return { error: `Unknown prompt: ${name}` };
+
+  return {
+    name: prompt.name,
+    description: prompt.description,
+    content: await prompt.render(args),
+  };
+}
+
+/** Convert MCP tool specs into the shape the OpenAI chat API expects. */
+export function toOpenAiTools(specs: McpToolSpec[] = MCP_TOOLS) {
+  return specs.map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema,
+    },
+  }));
+}
+
+export type { McpPrompt, McpPromptSpec, McpResource, McpTool, McpToolSpec };

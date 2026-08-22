@@ -1,17 +1,6 @@
-import { desc } from "drizzle-orm";
-import { db } from "@/src/db/client";
-import { books } from "@/src/db/schema";
-import { AgentConsole } from "./_components/agent-console";
-
-type BookRow = typeof books.$inferSelect;
-
-function authorList(authors: unknown): string {
-  return Array.isArray(authors) ? authors.join(", ") : "Unknown";
-}
-
-async function getLibrary(): Promise<BookRow[]> {
-  return db.select().from(books).orderBy(desc(books.trustScore));
-}
+import { BooksList } from "@/src/features/books/BooksList";
+import { getLibrary } from "@/src/features/books/queries";
+import { ChatWindow } from "@/src/features/chat/ChatWindow";
 
 export default async function Home() {
   const library = await getLibrary();
@@ -35,57 +24,7 @@ export default async function Home() {
             </span>
           </div>
 
-          {library.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
-              No books yet. Seed the database to populate this section.
-            </p>
-          ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {library.map((book) => (
-                <li
-                  key={book.id}
-                  className="flex min-w-0 flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-slate-700"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="min-w-0 break-words font-medium leading-snug">
-                      {book.title}
-                    </h3>
-                    <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                      {book.trustScore}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 break-words text-sm text-slate-400">
-                    {authorList(book.authors)}
-                    {book.year ? ` · ${book.year}` : ""}
-                  </p>
-
-                  {book.description && (
-                    <p className="mt-3 line-clamp-3 text-sm text-slate-500">
-                      {book.description}
-                    </p>
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span className="rounded border border-slate-800 px-2 py-0.5">
-                      {book.source}
-                    </span>
-                    {book.license && (
-                      <span className="rounded border border-slate-800 px-2 py-0.5">
-                        {book.license}
-                      </span>
-                    )}
-                    <span className="rounded border border-slate-800 px-2 py-0.5">
-                      {book.chaptersCount} ch
-                    </span>
-                    <span className="rounded border border-slate-800 px-2 py-0.5">
-                      {book.tokensTotal.toLocaleString()} tokens
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <BooksList books={library} />
         </section>
 
         {/* Section 2 — Agent console */}
@@ -98,7 +37,7 @@ export default async function Home() {
             Chat on the left. On the right, the exact JSON the agent receives — tool
             schemas, resources, prompts, and every call and result as it happens.
           </p>
-          <AgentConsole />
+          <ChatWindow />
         </section>
       </div>
     </main>

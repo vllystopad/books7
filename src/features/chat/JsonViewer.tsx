@@ -26,7 +26,7 @@ function highlight(json: string): string {
   );
 }
 
-export function JsonBlock({ value }: { value: unknown }) {
+export function JsonViewer({ value }: { value: unknown }) {
   const json = JSON.stringify(value, null, 2) ?? "undefined";
 
   // min-w-0 lets the block shrink inside flex/grid parents; overflow-x-auto then

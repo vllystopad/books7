@@ -1,5 +1,10 @@
-/** Shared MCP shapes. Lives apart from the registry so tool files can import
- *  the types without a circular dependency back through `definitions.ts`. */
+/** Shared MCP shapes. Lives apart from the registries so resource/prompt/tool
+ *  files can import the types without a circular dependency back through
+ *  `definitions.ts`. */
+
+/* ------------------------------------------------------------------ */
+/* Tools                                                               */
+/* ------------------------------------------------------------------ */
 
 export type McpTool = {
   name: string;
@@ -13,11 +18,9 @@ export type McpTool = {
  *  agent inspector renders. Excludes `execute`. */
 export type McpToolSpec = Omit<McpTool, "execute">;
 
-export type McpPrompt = {
-  name: string;
-  description: string;
-  arguments: { name: string; description: string; required: boolean }[];
-};
+/* ------------------------------------------------------------------ */
+/* Resources                                                           */
+/* ------------------------------------------------------------------ */
 
 export type McpResource = {
   uri: string;
@@ -25,3 +28,31 @@ export type McpResource = {
   description: string;
   mimeType: string;
 };
+
+/** A named resource collection backed by a loader (usually a DB query). */
+export type McpResourceProvider = {
+  name: string;
+  description: string;
+  list: () => Promise<McpResource[]>;
+};
+
+/* ------------------------------------------------------------------ */
+/* Prompts                                                             */
+/* ------------------------------------------------------------------ */
+
+export type McpPromptArgument = {
+  name: string;
+  description: string;
+  required: boolean;
+};
+
+export type McpPrompt = {
+  name: string;
+  description: string;
+  arguments: McpPromptArgument[];
+  /** Renders the prompt body. May read resources, hence async. */
+  render: (args: Record<string, unknown>) => Promise<string>;
+};
+
+/** The serializable half of a prompt — what `prompts/list` returns. */
+export type McpPromptSpec = Omit<McpPrompt, "render">;
