@@ -1,256 +1,175 @@
-# Books7
+# Books7 — an MCP server exposing a searchable book corpus to LLM agents
 
-Context7 for books — accurate, topic-scoped context over MCP for business non-fiction, science writing, and fiction.
+Books7 serves token-budgeted, attributed book excerpts to LLM clients over the Model Context
+Protocol, so an agent can ground answers in retrieved passages instead of recalling them.
 
-## What This Is
+## Highlights
 
-Books7 provides an MCP (Model Context Protocol) server that lets Claude and other AI agents query a library of books semantically. Instead of hallucinating book content, agents can:
+- **Built an MCP server exposing a book corpus to LLM clients** — tools, resources, and prompts
+  assembled from a single registry, returning token-budgeted excerpts with mandatory attribution
+  (Next.js 16 route handlers, PostgreSQL, Drizzle ORM).
+- **Designed structured failure semantics so calling models can distinguish "no data" from "no
+  answer".** Every content tool returns a typed outcome label — `BOOK_NOT_IN_CORPUS`,
+  `BOOK_NOT_INGESTED`, `NO_MATCH_FOR_TOPIC`, `CAPPED` — on the first line of the response, each
+  carrying at least one concrete next action. This replaced empty results that caused clients to
+  emit filler instead of reporting the gap.
+- **Added a self-describing corpus resource** generated from live database counts, including an
+  explicit list of what the corpus does *not* contain, so clients stop inventing capabilities from
+  tool names. Exposed as both a resource and a tool, because some MCP clients are tools-only.
+- **Enforced AI-content transparency per EU AI Act Art. 50 across four layers** — a database CHECK
+  constraint making an unmarked synthetic row impossible to insert, UI badges and disclosure
+  callouts, `noindex` plus omitted schema.org `Book` markup, and warning-wrapped MCP tool output —
+  all formatted from one domain predicate so the layers cannot drift apart.
+- **Built a document ingestion pipeline** — EPUB/PDF/text parsing, semantic chunking (~800 tokens
+  with overlap), and a batched embedding provider with an OpenAI or local `@xenova/transformers`
+  backend.
+- **Modelled a synthetic evaluation corpus** whose authors deliberately contradict one another
+  within topic clusters, so retrieval can be tested against known disagreement rather than
+  paraphrases of a single position.
 
-1. **Resolve** a book by title, author, or topic ("find a book about unit economics")
-2. **Get context** from a book — hybrid search (BM25 + vector) with snippets, chapter summaries, and proper attribution
-3. **Search across books** — "what do different authors say about delegation?"
+## Current status
+
+This is a working prototype, not a production service. Accurate as of the latest commit:
+
+| Area | State |
+|---|---|
+| Retrieval | **Lexical only** — PostgreSQL `ts_rank` over `to_tsvector`. Not BM25. |
+| Embeddings | Provider code exists; `chunks` has **no `embedding` column**, so vector search is unavailable and semantic queries that share no vocabulary with the text will miss. |
+| Corpus | 25 catalogue records, **all AI-generated demo data**. 6 are ingested and readable; 19 are metadata-only. No real public-domain works are currently indexed. |
+| Topic taxonomy | Not generated. The corpus resource reports its absence rather than inferring categories. |
+| Tests | None yet. |
+
+`describe_corpus` reports all of the above from live database state, so an agent is told these
+limits rather than discovering them by failing.
 
 ## Stack
 
-- **Next.js 15** (App Router, RSC)
-- **Drizzle ORM** + **PostgreSQL** with **pgvector**
-- **Embeddings**: OpenAI (text-embedding-3-small) or local (@xenova/transformers)
-- **MCP**: @modelcontextprotocol/sdk via route handlers
-- **Tailwind CSS v4** + shadcn/ui
+- **Next.js 16** (App Router, React Server Components)
+- **PostgreSQL** (Neon) + **Drizzle ORM**
+- **Zod** for tool-argument validation
+- **Tailwind CSS v4**
+- **OpenAI** SDK for chat and embeddings; `@xenova/transformers` for local embeddings
+- MCP surface implemented directly over Next.js route handlers — no MCP SDK dependency
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL 15+ with pgvector extension (or Neon)
+- A PostgreSQL 15+ database ([Neon](https://console.neon.tech) works well)
 
-### 1. Install Dependencies
+### 1. Install
 
 ```bash
 npm install
 ```
 
-### 2. Set Up Database
-
-#### Option A: Local PostgreSQL with Docker
-
-```bash
-docker-compose up -d
-```
-
-This starts a Postgres 17 instance with pgvector already enabled.
-
-#### Option B: Neon (Serverless)
-
-1. Create a Neon project at https://console.neon.tech
-2. Enable the pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector;`
-3. Copy the connection string
-
-### 3. Configure Environment
-
-Copy `.env.example` to `.env`:
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Set `NEXT_APP_DATABASE_URL`:
+Set the connection string:
 
 ```bash
-# Local
-NEXT_APP_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/books7
-
-# Or Neon
-NEXT_APP_DATABASE_URL=postgresql://user:password@ep-xxx.us-east-1.neon.tech/dbname
+NEXT_APP_DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 ```
 
-Optionally set `NEXT_APP_OPENAI_API_KEY` for embeddings (falls back to local if not set):
+Optionally set an OpenAI key for the agent console and embeddings:
 
 ```bash
 NEXT_APP_OPENAI_API_KEY=sk-...
 ```
 
-### 4. Run Migrations
+`.env` is gitignored. Never commit it.
 
-```bash
-npx drizzle-kit push
+### 3. Run migrations
+
+Migrations are plain SQL in `src/db/migrations/`, applied in filename order:
+
+```
+001_init.sql                  schema
+002_synthetic_provenance.sql  AI provenance columns + CHECK constraint
 ```
 
-### 5. Seed Public Domain Books (Optional)
+Apply them with `psql`, the Neon SQL editor, or your migration tool of choice.
 
-Download and ingest 4 public-domain books from Project Gutenberg:
-
-```bash
-npm run seed
-```
-
-This downloads:
-- The Art of War
-- The Adventures of Sherlock Holmes
-- The Picture of Dorian Gray
-- A Tale of Two Cities
-
-Books are chunked (~800 tokens), embedded, and stored in the database.
-
-### 6. Start Dev Server
+### 4. Start
 
 ```bash
 npm run dev
 ```
 
-Navigate to http://localhost:3000
+Open http://localhost:3000. The landing page has an agent console that shows the exact JSON the
+model receives — tool schemas, resources, prompts, and every tool call and result as it happens.
 
-## Ingesting Books
+## MCP surface
 
-To ingest a custom book:
-
-```bash
-npm run ingest <path/to/book.txt> --slug author-name/book-title
-```
-
-Supported formats: `.txt`, `.md`, `.epub` (limited), `.pdf` (limited)
-
-## MCP Server
-
-The MCP endpoint is `/api/mcp` (HTTP POST with Streamable transport).
-
-### Add to Claude Code
+Endpoint: `POST /api/mcp/http`
 
 ```bash
-claude mcp add --transport http books7 http://localhost:3000/api/mcp
+curl -X POST http://localhost:3000/api/mcp/http \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"tools/list"}'
 ```
 
-Or manually in `~/.claude/mcp.json`:
+Supported methods: `tools/list`, `tools/call`, `resources/list`, `prompts/list`, `prompts/get`.
+`GET /api/mcp/http` returns a discovery document.
 
-```json
-{
-  "mcpServers": {
-    "books7": {
-      "command": "npx",
-      "args": ["http-connector", "http://localhost:3000/api/mcp"],
-      "transport": "http"
-    }
-  }
-}
-```
+### Tools
 
-### Available Tools
+| Tool | Purpose |
+|---|---|
+| `describe_corpus` | What the corpus contains, and explicitly what it does not. Call before assuming coverage. |
+| `list_books` | Catalogue listing with resource URIs. |
+| `resolve_book_id` | Free-text title/author/topic → slug. |
+| `search_books` | Find books discussing a subject. |
+| `get_book_context` | Read attributed passages from one book, optionally topic-scoped. |
 
-1. **`resolve-book-id`** — Find books by title, author, or topic
-   - Input: `{ query: string }`
-   - Output: List of candidates with ID, title, authors, snippet count, trust score
+Each tool carries an `examples` pair — one question it answers well, one it does not — surfaced
+through `describe_corpus` so clients pick the right tool without trial and error.
 
-2. **`get-book-context`** — Get snippets from a book
-   - Input: `{ bookId: string, topic?: string, tokens?: number (default 5000), mode?: 'snippets' | 'outline' }`
-   - Output: Plain text with snippets, attribution, license
+### Prompts
 
-3. **`search-books`** — Search across all books
-   - Input: `{ topic: string, limit?: number }`
-   - Output: Snippets from multiple books with source attribution
+`list_books`, `compare_authors`, `summarise_book`.
 
-## Database Schema
+### Resources
 
-```sql
--- Books
-- id, slug, title, authors (JSON), description, cover_url
-- language, year, source (public_domain | user_upload | summary)
-- license, tokens_total, chapters_count, trust_score, created_at
-
--- Chapters
-- id, book_id, order, title, summary
-
--- Chunks (indexed for search)
-- id, book_id, chapter_id, order, content, tokens
-- embedding (vector(1536)), created_at
-
--- Topics (many-to-many with books)
-- id, name, description
-```
-
-Indexes:
-- HNSW on `embedding` (cosine distance)
-- GIN on `tsv` (full-text search, future)
-- btree on `slug`, `source`, `book_id`, `chapter_id`
+`books://corpus-summary`, and one `books://book/{slug}` per catalogue record.
 
 ## Architecture
 
 ```
+app/
+  (marketing)/page.tsx        server component: fetch, then render client view
+  books/[slug]/page.tsx       metadata, JSON-LD gating, detail view
+  api/chat|mcp|search/        thin route handlers
+  sitemap.ts                  excludes synthetic slugs
 src/
-  app/              # Next.js pages and API routes
-  core/             # Domain logic (books, search, ingestion, embeddings)
-  mcp/              # MCP tools
-  components/       # React components
-  db/               # Drizzle schema, migrations, client
-  lib/              # Utilities, config, constants
-  types/            # Shared types
+  core/books/                 domain layer — entities, outcomes, retrieval, corpus stats
+  db/                         Drizzle schema, client, SQL migrations
+  features/books|chat/        UI components, feature-scoped
+  mcp/                        registry, agent loop, and resources|prompts|tools per use case
 ```
 
-Domain layer (`core/`) is Next.js-agnostic — business logic stays separate from HTTP/MCP adapters.
+The domain layer under `src/core` is framework-agnostic; the website and the MCP tools call the
+same use cases, so the two surfaces cannot return different answers for the same question.
 
-## Legal Boundary
+## Data and licensing
 
-- **Full texts** are never stored for copyrighted books
-- **Public domain** books: any snippet is allowed
-- **User uploads**: visible only to uploader
-- **Summaries**: our condensed notes, not original text
-- **Output cap**: max 5% of a book per session
-- **Attribution**: every snippet carries source and license
+The catalogue mixes real public-domain works with AI-generated demonstration records. Synthetic
+records are marked at every layer and are **not citable**. See [DATA.md](DATA.md) for the full
+per-source breakdown.
 
-## Development
+Synthetic entries carry `generated_by`, `generated_at`, and `synthetic_notice` columns, and a
+database constraint rejects any synthetic row missing them.
 
-### Run dev server with auto-reload
+## Roadmap
 
-```bash
-npm run dev
-```
-
-### Type check
-
-```bash
-npm run build
-```
-
-### Lint
-
-```bash
-npm run lint
-```
-
-### Query database
-
-```bash
-npx drizzle-kit studio
-```
-
-Opens a local web UI for browsing data.
-
-## Performance
-
-- **Vector search**: HNSW index (16 neighbors, 64 construction factor)
-- **Full-text search**: GIN index on tsvector (future)
-- **Hybrid fusion**: Reciprocal Rank Fusion (RRF) with configurable weights
-- **Chunking**: Semantic by paragraph, ~800 tokens, 100-token overlap
-- **Embedding**: Batched (100 chunks/batch) with retry logic
-
-## Future
-
-- [ ] Chapter summaries via LLM
-- [ ] Author/topic filtering in search
-- [ ] Rate limiting per IP/API key
-- [ ] User uploads with access control
-- [ ] PDF and EPUB parsing (current: text-only)
-- [ ] Highlight search matches in UI
-- [ ] Dark mode (already CSS-ready)
-
-## Support
-
-For issues, check:
-1. `.env` has `NEXT_APP_DATABASE_URL` and points to a running database
-2. `docker-compose ps` shows postgres is healthy (if using Docker)
-3. Migrations ran: `npx drizzle-kit push`
-4. Logs: `npm run dev` shows any startup errors
-
----
-
-**Built with ❤️ using Next.js, Drizzle, PostgreSQL, and pgvector**
+- [ ] Backfill embeddings and add an `embedding` column; retrieval flips to hybrid automatically
+      once present (`retrievalMode()` probes for the column)
+- [ ] Replace `ts_rank` with true BM25 scoring
+- [ ] Generate the topic taxonomy at ingest
+- [ ] Index real public-domain works alongside the synthetic fixtures
+- [ ] Test suite around outcome labels and provenance marking
